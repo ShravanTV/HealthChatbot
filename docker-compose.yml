@@ -1,0 +1,59 @@
+# version: '3.8'
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: healthchat_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - INDEX_PATH=/app/api/../../faiss_index_pdf
+      - OLLAMA_BASE_URL=http://ollama:11434
+    env_file:
+      - .env
+    volumes:
+      - ./faiss_index_pdf:/app/api/../../faiss_index_pdf
+      - ./backend/api:/app/api
+      - ./backend:/app/backend
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  webapp:
+    build: ./webapp
+    container_name: healthchat_webapp
+    environment:
+      - API_URL=http://backend:8000/chat
+      - BMI_URL=http://backend:8000/bmi
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    volumes:
+      - ./webapp:/app
+      - webapp_data:/app/data
+      - webapp_logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  backend_logs:
+  webapp_data:
+  webapp_logs:
+  ollama_data:
